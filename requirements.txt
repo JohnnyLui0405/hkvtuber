@@ -1,0 +1,10 @@
+discord.py
+pytz
+requests
+pymongo
+dnspython
+google-api-python-client
+requests_html
+beautifulsoup4
+python-decouple
+tweepy
