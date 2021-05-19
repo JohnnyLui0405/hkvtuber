@@ -28,33 +28,39 @@ class youtube(commands.Cog):
         print("IPv4: " + requests.get("https://api.ipify.org").text)
         self.is_live.start()
 
-
-    async def live_send(self, video): #發送直播通知
+    async def live_send(self, video, update_time): #發送直播通知
         url = "https://www.youtube.com/watch?v={}".format(video["videoId"])
-        for guild in self.bot.guilds:
+        guilds = db.channel.find({})
+        for guild in guilds:
             try:
-                channel_id = db.channel.find_one({"_id": guild.id})["channel_id"]
-                if not channel_id == None:
-                    channel = self.bot.get_channel(channel_id)
-                    embed=discord.Embed(title=video["title"], description=f"[{video['channelTitle']}]({video['channelUrl']})", url=url, color=0xdb0000)
-                    embed.add_field(name="直播狀態", value="直播中", inline=True)
-                    embed.set_image(url=video["thumbnail"])
-                    await channel.send(embed=embed)
+                if video["channelUrl"].split("/channel/")[1] in guild["YTChannels"] or guild["YTChannels"] == all:
+                    channel_id = guild["channel_id"]
+                    if not channel_id == None:
+                        channel = self.bot.get_channel(channel_id)
+                        embed=discord.Embed(title=video["title"], description=f"[{video['channelTitle']}]({video['channelUrl']})", url=url, color=0xdb0000)
+                        embed.add_field(name="直播狀態", value="直播中", inline=True)
+                        embed.set_footer(text=f"更新於 {self.upcomingtime(int(update_time))}")
+                        embed.set_image(url=video["thumbnail"])
+                        await channel.send(embed=embed)
             except Exception as e:
                 print(e)
 
-    async def upcoming_send(self, video):
+    async def upcoming_send(self, video, update_time):
         url = "https://www.youtube.com/watch?v={}".format(video["videoId"])
-        for guild in self.bot.guilds:
+        guilds = db.channel.find({})
+        for guild in guilds:
             try:
-                channel_id = db.channel.find_one({"_id": guild.id})["channel_id"]
-                if not channel_id == None:
-                    channel = self.bot.get_channel(channel_id)
-                    embed=discord.Embed(title=video["title"], description=f"[{video['channelTitle']}]({video['channelUrl']})", url=url, color=0x636363)
-                    embed.add_field(name="直播狀態", value="預定", inline=True)
-                    embed.add_field(name="預定開台時間", value=self.upcomingtime(int(video["upcoming"])), inline=True)
-                    embed.set_image(url=video["thumbnail"])
-                    await channel.send(embed=embed)
+                if video["channelUrl"].split("/channel/")[1] in guild["YTChannels"] or guild["YTChannels"] == "all":
+                    print(True)
+                    channel_id = guild["channel_id"]
+                    if not channel_id == None:
+                        channel = self.bot.get_channel(channel_id)
+                        embed=discord.Embed(title=video["title"], description=f"[{video['channelTitle']}]({video['channelUrl']})", url=url, color=0x636363)
+                        embed.add_field(name="直播狀態", value="預定", inline=True)
+                        embed.add_field(name="預定開台時間", value=self.upcomingtime(int(video["upcoming"])), inline=True)
+                        embed.set_footer(text=f"更新於 {self.upcomingtime(int(update_time))}")
+                        embed.set_image(url=self.bigpicture(video["thumbnail"]))
+                        await channel.send(embed=embed)
             except Exception as e:
                 print(e)
 
@@ -76,6 +82,11 @@ class youtube(commands.Cog):
             except Exception as e:
                 print(e)
         print(f"New Video {video_url}")
+
+    def bigpicture(self, url):
+        url = url.split("hqdefault")
+        newurl = url[0] + "maxresdefault.jpg"
+        return newurl
 
     def upcomingtime(self,ts):
         LQ = datetime.fromtimestamp(ts).astimezone(pytz.timezone("Asia/Hong_Kong")).strftime('%p')
@@ -136,21 +147,28 @@ class youtube(commands.Cog):
     async def is_live(self):
         r = requests.get("https://vtuber.hk/data/live.json?t=")
         videodata = r.json()
-        with open('./json/data.json') as jfile:
+        with open('./json/data.json', mode="w") as jfile:
             json.dump(videodata, jfile)
-        data = collection.find_one({"_id":"data"})
+        with open('./json/videoId.json', mode="r") as jfile:
+            data = json.load(jfile)
+        newdata = {"Streaming":[],"Upcoming":[]}
         for video in videodata["videos"]:
-            if video["status"] == "live" and (not video["videoId"] in data["Streaming"]):
-                print(video)
-                await self.live_send(video)
-                data["Streaming"].append(video["videoId"])
-                print(data["Streaming"])
-                collection.update_one({"_id":"data"}, {"$set": {"Streaming": data["Streaming"]}})
-            elif video["status"] == "upcoming" and (not video["videoId"] in data["Upcoming"]):
-                print(video)
-                await self.upcoming_send(video)
-                data["Upcoming"].append(video["videoId"])
-                collection.update_one({"_id":"data"}, {"$set": {"Upcoming": data["Upcoming"]}})
+            if video["status"] == "live":
+                newdata["Streaming"].append(video["videoId"])
+                if (not video["videoId"] in data["Streaming"]):
+                    print(video["videoId"] + " is Streaming")
+                    await self.live_send(video, videodata["updateTime"])
+
+            elif video["status"] == "upcoming":
+                newdata["Upcoming"].append(video["videoId"])
+                if (not video["videoId"] in data["Upcoming"]):
+                    print(video["videoId"] + " is Upcoming")
+                    await self.upcoming_send(video, videodata["updateTime"])
+
+        with open('./json/videoId.json', mode="w") as jfile:
+            json.dump(newdata, jfile)
+        
+
 
     @tasks.loop(minutes=2)
     async def VideoUpload(self):
@@ -180,34 +198,33 @@ class youtube(commands.Cog):
         collection.update_one({"_id": "LiveData"},{"$set": {"VideoData": self.oldVideosData}})
 
     @commands.command()
-    async def reboot(self,ctx,function):
+    async def reboot(self,ctx,function=None):
         if ctx.author.id == 334534960654450690:
             if function == "islive":
                 self.is_live.start()
                 await ctx.send("已重新啟動islive")
-            elif function == "VideoUpload":
-                self.VideoUpload.start()
-                await ctx.send("已重新啟動VideoUpload")
         else:
-            await ctx.send("只有開發者能使用此指令")
+            await ctx.send("You have no permission to use this command")
 
     @commands.command()
     async def check(self,ctx):
         if ctx.author.id == 334534960654450690:
             await ctx.send(f"is_live {self.is_live.is_running()}")
             await ctx.send(f"VideoUpload {self.VideoUpload.is_running()}")
+        else:
+            await ctx.send("You have no permission to use this command")
 
-    @commands.command()
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def upcoming(self,ctx):
-        upcoming = self.LiveData["upcoming"]
-        for List in upcoming:
-            url = "https://www.youtube.com/watch?v={}".format(List["videoId"])
-            embed=discord.Embed(title=List["title"], url=url, color=0xdb0000)
-            embed.add_field(name="直播狀態", value="預定", inline=True)
-            embed.add_field(name="排定開台時間", value=self.upcomingtime(int(List["starttime"])), inline=True)
-            embed.set_image(url=List["imageurl"])
-            await ctx.send(embed=embed)
+    # @commands.command()
+    # @commands.cooldown(1, 5, commands.BucketType.user)
+    # async def upcoming(self,ctx):
+    #     upcoming = self.LiveData["upcoming"]
+    #     for List in upcoming:
+    #         url = "https://www.youtube.com/watch?v={}".format(List["videoId"])
+    #         embed=discord.Embed(title=List["title"], url=url, color=0xdb0000)
+    #         embed.add_field(name="直播狀態", value="預定", inline=True)
+    #         embed.add_field(name="排定開台時間", value=self.upcomingtime(int(List["starttime"])), inline=True)
+    #         embed.set_image(url=List["imageurl"])
+    #         await ctx.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_command_error(self,ctx,error):

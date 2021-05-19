@@ -1,0 +1,22 @@
+[
+    {
+        "name": "hkv!setup [optional:channel]",
+        "value": "\u8a2d\u5b9a\u901a\u77e5\u983b\u9053"
+    },
+    {
+        "name": "hkv!delete",
+        "value": "\u79fb\u9664\u901a\u77e5\u983b\u9053"
+    },
+    {
+        "name": "hkv!channels",
+        "value": "\u67e5\u770b\u652f\u63f4\u76f4\u64ad\u901a\u77e5\u65e2\u6e2fV\u540d\u55ae"
+    },
+    {
+        "name": "hkv!addnoticechannel(hkv!add)",
+        "value": "\u65b0\u589e\u6e2f\u0056\u983b\u9053\u901a\u77e5"
+    },
+    {
+        "name": "hkv!remove(hkv!removenoticechannel)",
+        "value": "\u79fb\u9664\u6e2f\u0056\u983b\u9053\u901a\u77e5"
+    }
+]
